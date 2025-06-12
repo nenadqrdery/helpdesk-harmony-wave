@@ -34,6 +34,7 @@ const AdminDashboard = () => {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [sortBy, setSortBy] = useState<'created_at' | 'priority' | 'status'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [viewMode, setViewMode] = useState<'detailed' | 'compressed'>('detailed');
 
   // Mock data
   useEffect(() => {
@@ -238,6 +239,11 @@ const AdminDashboard = () => {
     return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  const formatTicketNumber = (id: string) => {
+    const numericId = parseInt(id.slice(-6), 16).toString().padStart(6, '0');
+    return `#${numericId}`;
+  };
+
   // Calculate stats
   const totalTickets = tickets.length;
   const openTickets = tickets.filter(t => ['new', 'open', 'in_progress'].includes(t.status)).length;
@@ -386,25 +392,47 @@ const AdminDashboard = () => {
         {/* Enhanced Tickets Table */}
         <Card>
           <CardHeader>
-            <CardTitle>All Tickets</CardTitle>
-            <CardDescription>
-              {filteredTickets.length} of {totalTickets} tickets
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>All Tickets</CardTitle>
+                <CardDescription>
+                  {filteredTickets.length} of {totalTickets} tickets
+                </CardDescription>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant={viewMode === 'detailed' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('detailed')}
+                >
+                  Detailed
+                </Button>
+                <Button
+                  variant={viewMode === 'compressed' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('compressed')}
+                >
+                  Compressed
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {filteredTickets.map((ticket) => (
                 <div 
                   key={ticket.id}
-                  className={`border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer ${
+                  className={`border rounded-lg ${viewMode === 'compressed' ? 'p-3' : 'p-4'} hover:bg-muted/50 transition-colors cursor-pointer ${
                     isOverdue(ticket) ? 'border-red-200 bg-red-50' : ''
                   }`}
                   onClick={() => handleTicketClick(ticket)}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="space-y-2 flex-1">
+                    <div className={`space-y-${viewMode === 'compressed' ? '1' : '2'} flex-1`}>
                       <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-lg">{ticket.subject}</h3>
+                        <h3 className={`font-semibold ${viewMode === 'compressed' ? 'text-base' : 'text-lg'}`}>
+                          {ticket.subject}
+                        </h3>
                         <Badge variant="outline" className={`text-xs ${getStatusColor(ticket.status)}`}>
                           {formatStatus(ticket.status)}
                         </Badge>
@@ -419,11 +447,15 @@ const AdminDashboard = () => {
                         )}
                       </div>
                       
-                      <p className="text-muted-foreground line-clamp-2">
-                        {ticket.description}
-                      </p>
+                      {viewMode === 'detailed' && (
+                        <p className="text-muted-foreground line-clamp-2">
+                          {ticket.description}
+                        </p>
+                      )}
                       
-                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                      <div className={`flex items-center space-x-4 text-sm text-muted-foreground ${
+                        viewMode === 'compressed' ? 'text-xs' : ''
+                      }`}>
                         <div className="flex items-center space-x-1">
                           <UserIcon className="h-4 w-4" />
                           <span>{ticket.user?.name}</span>
@@ -444,10 +476,10 @@ const AdminDashboard = () => {
                             <span>{ticket.attachments.length}</span>
                           </div>
                         )}
-                        <span className="text-xs">#{ticket.id.slice(-6).toUpperCase()}</span>
+                        <span className="text-xs">{formatTicketNumber(ticket.id)}</span>
                       </div>
                       
-                      {ticket.tags.length > 0 && (
+                      {viewMode === 'detailed' && ticket.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {ticket.tags.map((tag) => (
                             <Badge key={tag} variant="secondary" className="text-xs">

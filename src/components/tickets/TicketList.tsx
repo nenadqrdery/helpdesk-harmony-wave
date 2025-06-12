@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +47,11 @@ const TicketList: React.FC<TicketListProps> = ({ tickets, onTicketClick, showUse
 
   const formatStatus = (status: string) => {
     return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const formatTicketNumber = (id: string) => {
+    const numericId = parseInt(id.slice(-6), 16).toString().padStart(6, '0');
+    return `#${numericId}`;
   };
 
   if (tickets.length === 0) {
@@ -108,7 +112,7 @@ const TicketList: React.FC<TicketListProps> = ({ tickets, onTicketClick, showUse
                   </div>
                 )}
               </div>
-              <span className="text-xs">#{ticket.id.slice(-6).toUpperCase()}</span>
+              <span className="text-xs">{formatTicketNumber(ticket.id)}</span>
             </div>
             {ticket.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
