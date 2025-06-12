@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -86,8 +85,12 @@ const TicketDetailView: React.FC<TicketDetailViewProps> = ({
   };
 
   const formatTicketNumber = (id: string) => {
-    const numericId = parseInt(id.slice(-6), 16).toString().padStart(6, '0');
-    return `#${numericId}`;
+    const hash = id.split('').reduce((acc, char) => {
+      return char.charCodeAt(0) + ((acc << 5) - acc);
+    }, 0);
+    const positiveHash = Math.abs(hash);
+    const sixDigitNumber = positiveHash % 1000000;
+    return `#${sixDigitNumber.toString().padStart(6, '0')}`;
   };
 
   const getStatusColor = (status: string) => {
@@ -285,7 +288,7 @@ const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={editingTicket.status}
-                    onValueChange={(value) => setEditingTicket({...editingTicket, status: value})}
+                    onValueChange={(value) => setEditingTicket({...editingTicket, status: value as Ticket['status']})}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -305,7 +308,7 @@ const TicketDetailView: React.FC<TicketDetailViewProps> = ({
                   <Label htmlFor="priority">Priority</Label>
                   <Select
                     value={editingTicket.priority}
-                    onValueChange={(value) => setEditingTicket({...editingTicket, priority: value})}
+                    onValueChange={(value) => setEditingTicket({...editingTicket, priority: value as Ticket['priority']})}
                   >
                     <SelectTrigger>
                       <SelectValue />
