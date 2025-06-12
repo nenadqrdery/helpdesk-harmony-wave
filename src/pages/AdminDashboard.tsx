@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import StatsCard from '@/components/dashboard/StatsCard';
+import TicketDetailView from '@/components/tickets/TicketDetailView';
 import { Ticket, TicketFilters, User } from '@/types/ticket';
 import { 
   LogOut, 
@@ -21,7 +21,8 @@ import {
   MoreHorizontal,
   User as UserIcon,
   Calendar,
-  Paperclip
+  Paperclip,
+  ArrowUpDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -31,6 +32,8 @@ const AdminDashboard = () => {
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [filters, setFilters] = useState<TicketFilters>({});
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [sortBy, setSortBy] = useState<'created_at' | 'priority' | 'status'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Mock data
   useEffect(() => {
@@ -116,7 +119,7 @@ const AdminDashboard = () => {
     setTickets(mockTickets);
   }, []);
 
-  // Filter tickets based on current filters
+  // Filter and sort tickets based on current filters and sort settings
   useEffect(() => {
     let filtered = tickets;
 
@@ -137,14 +140,66 @@ const AdminDashboard = () => {
       );
     }
 
+    // Sort tickets
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortBy) {
+        case 'created_at':
+          aValue = new Date(a.created_at);
+          bValue = new Date(b.created_at);
+          break;
+        case 'priority':
+          const priorityOrder = { 'critical': 4, 'high': 3, 'medium': 2, 'low': 1 };
+          aValue = priorityOrder[a.priority];
+          bValue = priorityOrder[b.priority];
+          break;
+        case 'status':
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        default:
+          aValue = a.created_at;
+          bValue = b.created_at;
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
     setFilteredTickets(filtered);
-  }, [tickets, filters]);
+  }, [tickets, filters, sortBy, sortOrder]);
 
   const updateFilters = (key: keyof TicketFilters, value: string) => {
     setFilters(prev => ({
       ...prev,
       [key]: value === 'all' ? undefined : value
     }));
+  };
+
+  const handleTicketClick = (ticket: Ticket) => {
+    setSelectedTicket(ticket);
+  };
+
+  const handleTicketUpdate = (updatedTicket: Ticket) => {
+    setTickets(prevTickets =>
+      prevTickets.map(ticket =>
+        ticket.id === updatedTicket.id ? updatedTicket : ticket
+      )
+    );
+  };
+
+  const handleSort = (field: 'created_at' | 'priority' | 'status') => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('desc');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -189,6 +244,10 @@ const AdminDashboard = () => {
   const pendingTickets = tickets.filter(t => t.status === 'pending').length;
   const resolvedTickets = tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length;
   const criticalTickets = tickets.filter(t => t.priority === 'critical').length;
+
+  const isOverdue = (ticket: Ticket) => {
+    return ticket.due_date && new Date(ticket.due_date) < new Date();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -251,16 +310,16 @@ const AdminDashboard = () => {
           />
         </div>
 
-        {/* Filters */}
+        {/* Enhanced Filters */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Filter className="w-5 h-5" />
-              <span>Filters</span>
+              <span>Filters & Search</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -299,6 +358,24 @@ const AdminDashboard = () => {
                 </SelectContent>
               </Select>
 
+              <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
+                const [field, order] = value.split('-') as [typeof sortBy, typeof sortOrder];
+                setSortBy(field);
+                setSortOrder(order);
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at-desc">Newest First</SelectItem>
+                  <SelectItem value="created_at-asc">Oldest First</SelectItem>
+                  <SelectItem value="priority-desc">High Priority First</SelectItem>
+                  <SelectItem value="priority-asc">Low Priority First</SelectItem>
+                  <SelectItem value="status-asc">Status A-Z</SelectItem>
+                  <SelectItem value="status-desc">Status Z-A</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Button variant="outline" onClick={() => setFilters({})}>
                 Clear Filters
               </Button>
@@ -306,7 +383,7 @@ const AdminDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Tickets Table */}
+        {/* Enhanced Tickets Table */}
         <Card>
           <CardHeader>
             <CardTitle>All Tickets</CardTitle>
@@ -319,8 +396,10 @@ const AdminDashboard = () => {
               {filteredTickets.map((ticket) => (
                 <div 
                   key={ticket.id}
-                  className="border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => setSelectedTicket(ticket)}
+                  className={`border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer ${
+                    isOverdue(ticket) ? 'border-red-200 bg-red-50' : ''
+                  }`}
+                  onClick={() => handleTicketClick(ticket)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="space-y-2 flex-1">
@@ -332,6 +411,12 @@ const AdminDashboard = () => {
                         <Badge variant="outline" className={`text-xs ${getPriorityColor(ticket.priority)}`}>
                           {ticket.priority.toUpperCase()}
                         </Badge>
+                        {isOverdue(ticket) && (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            OVERDUE
+                          </Badge>
+                        )}
                       </div>
                       
                       <p className="text-muted-foreground line-clamp-2">
@@ -347,6 +432,12 @@ const AdminDashboard = () => {
                           <Calendar className="h-4 w-4" />
                           <span>{format(new Date(ticket.created_at), 'MMM dd, yyyy')}</span>
                         </div>
+                        {ticket.due_date && (
+                          <div className={`flex items-center space-x-1 ${isOverdue(ticket) ? 'text-red-600' : ''}`}>
+                            <Clock className="h-4 w-4" />
+                            <span>Due {format(new Date(ticket.due_date), 'MMM dd')}</span>
+                          </div>
+                        )}
                         {ticket.attachments.length > 0 && (
                           <div className="flex items-center space-x-1">
                             <Paperclip className="h-4 w-4" />
@@ -386,6 +477,14 @@ const AdminDashboard = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Ticket Detail View */}
+        <TicketDetailView
+          ticket={selectedTicket}
+          isOpen={!!selectedTicket}
+          onClose={() => setSelectedTicket(null)}
+          onUpdate={handleTicketUpdate}
+        />
       </main>
     </div>
   );
