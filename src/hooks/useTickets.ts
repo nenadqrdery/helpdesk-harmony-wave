@@ -52,9 +52,11 @@ export const useTickets = (filters?: TicketFilters) => {
 
       if (error) throw error;
 
-      // Transform the data to match our types
-      const transformedTickets = data?.map(ticket => ({
+      // Transform the data to match our types with proper type assertions
+      const transformedTickets: Ticket[] = data?.map(ticket => ({
         ...ticket,
+        status: ticket.status as Ticket['status'],
+        priority: ticket.priority as Ticket['priority'],
         tags: ticket.tags?.map((t: any) => t.tag) || [],
         comments: ticket.comments || [],
         attachments: ticket.attachments || [],
@@ -77,7 +79,7 @@ export const useTickets = (filters?: TicketFilters) => {
     }
   };
 
-  const createTicket = async (ticketData: Partial<Ticket>) => {
+  const createTicket = async (ticketData: { subject: string; description: string; priority?: Ticket['priority']; category?: string }) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
@@ -85,7 +87,10 @@ export const useTickets = (filters?: TicketFilters) => {
       const { data, error } = await supabase
         .from('tickets')
         .insert({
-          ...ticketData,
+          subject: ticketData.subject,
+          description: ticketData.description,
+          priority: ticketData.priority || 'medium',
+          category: ticketData.category,
           user_id: user.id
         })
         .select()
