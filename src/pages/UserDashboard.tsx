@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,62 +6,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CreateTicketForm from '@/components/tickets/CreateTicketForm';
 import TicketList from '@/components/tickets/TicketList';
 import StatsCard from '@/components/dashboard/StatsCard';
-import { Ticket } from '@/types/ticket';
 import { LogOut, Plus, Ticket as TicketIcon, Clock, CheckCircle2 } from 'lucide-react';
+import AdminTicketTable from '@/components/tickets/AdminTicketTable';
+import EnhancedTicketDetailView from '@/components/tickets/EnhancedTicketDetailView';
+import { useTickets } from '@/hooks/useTickets';
+import { Ticket } from '@/types/ticketing';
 
 const UserDashboard = () => {
   const { user, logout } = useAuth();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { tickets, loading, fetchTickets } = useTickets();
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
-  // Mock data for user tickets
-  useEffect(() => {
-    const mockTickets: Ticket[] = [
-      {
-        id: 'ticket001',
-        user_id: user?.id || '',
-        subject: 'Login issue with my account',
-        description: 'I cannot log into my account even with the correct password. Getting error message.',
-        status: 'open',
-        priority: 'high',
-        category: 'Account Problem',
-        tags: ['login', 'authentication'],
-        attachments: [],
-        created_at: '2024-01-15T10:30:00Z',
-        updated_at: '2024-01-15T10:30:00Z'
-      },
-      {
-        id: 'ticket002',
-        user_id: user?.id || '',
-        subject: 'Feature request for mobile app',
-        description: 'Would love to see dark mode in the mobile application.',
-        status: 'pending',
-        priority: 'low',
-        category: 'Feature Request',
-        tags: ['mobile', 'ui'],
-        attachments: [],
-        created_at: '2024-01-14T14:20:00Z',
-        updated_at: '2024-01-14T16:45:00Z'
-      },
-      {
-        id: 'ticket003',
-        user_id: user?.id || '',
-        subject: 'Billing question about subscription',
-        description: 'Need clarification about the billing cycle and charges.',
-        status: 'resolved',
-        priority: 'medium',
-        category: 'Billing Question',
-        tags: ['billing', 'subscription'],
-        attachments: [],
-        created_at: '2024-01-12T09:15:00Z',
-        updated_at: '2024-01-13T11:30:00Z'
-      }
-    ];
-    setTickets(mockTickets);
-  }, [user?.id, refreshKey]);
-
-  const handleTicketCreated = () => {
-    setRefreshKey(prev => prev + 1);
+  const handleTicketClick = (ticket: Ticket) => setSelectedTicket(ticket);
+  const handleCloseDetail = () => setSelectedTicket(null);
+  const handleUpdateTicket = (updated: Ticket) => {
+    // Optionally update the ticket in state or refetch
+    fetchTickets();
+    setSelectedTicket(updated);
   };
 
   const openTickets = tickets.filter(t => ['new', 'open', 'in_progress'].includes(t.status));
@@ -71,6 +31,10 @@ const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Visible banner for confirmation */}
+      <div className="w-full bg-green-100 text-green-800 text-center py-2 font-bold">
+        🚀 UI UPDATED: You are seeing the new Supabase-powered dashboard!
+      </div>
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
@@ -92,6 +56,26 @@ const UserDashboard = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Admin view */}
+        {user?.role === 'admin' && (
+          <div className="mb-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Admin Ticket Overview</CardTitle>
+                <CardDescription>Manage all tickets in the system</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdminTicketTable
+                  tickets={tickets}
+                  loading={loading}
+                  onTicketClick={handleTicketClick}
+                  onFiltersChange={fetchTickets}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <StatsCard
             title="Open Tickets"
@@ -124,7 +108,7 @@ const UserDashboard = () => {
               Create New
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="tickets" className="space-y-6">
             <Card>
               <CardHeader>
@@ -134,13 +118,22 @@ const UserDashboard = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TicketList tickets={tickets} />
+                <TicketList tickets={tickets} onTicketClick={handleTicketClick} loading={loading} />
               </CardContent>
             </Card>
+            {/* Show ticket detail view if a ticket is selected */}
+            {selectedTicket && (
+              <EnhancedTicketDetailView 
+                ticket={selectedTicket} 
+                isOpen={!!selectedTicket}
+                onClose={handleCloseDetail}
+                onUpdate={handleUpdateTicket}
+              />
+            )}
           </TabsContent>
-          
+
           <TabsContent value="create" className="space-y-6">
-            <CreateTicketForm onTicketCreated={handleTicketCreated} />
+            <CreateTicketForm onTicketCreated={fetchTickets} />
           </TabsContent>
         </Tabs>
       </main>

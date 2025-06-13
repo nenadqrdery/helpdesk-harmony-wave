@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CalendarDays, MessageSquare, Paperclip, User } from 'lucide-react';
-import { Ticket } from '@/types/ticket';
+import { Ticket } from '@/types/ticketing';
 import { format } from 'date-fns';
 
 interface TicketListProps {
@@ -117,8 +117,8 @@ const TicketList: React.FC<TicketListProps> = ({ tickets, onTicketClick, showUse
             {ticket.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {ticket.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs">
-                    {tag}
+                  <Badge key={tag.id} variant="secondary" className="text-xs">
+                    {tag.name}
                   </Badge>
                 ))}
               </div>
