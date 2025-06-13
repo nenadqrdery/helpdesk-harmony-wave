@@ -1,4 +1,3 @@
-
 export interface Profile {
   id: string;
   email: string;
@@ -10,51 +9,51 @@ export interface Profile {
 
 export interface User {
   id: string;
-  email: string;
   name: string;
+  email: string;
+  avatar_url?: string;
+  role: 'admin' | 'user';
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Tag {
   id: string;
   name: string;
   color: string;
-  created_by?: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Attachment {
   id: string;
-  filename: string;
-  file_path: string;
-  file_size?: number;
-  content_type?: string;
-  uploaded_by: string;
+  name: string;
+  url: string;
+  size: number;
+  type: string;
   created_at: string;
-  ticket_id?: string;
-  comment_id?: string;
 }
 
 export interface Comment {
   id: string;
   ticket_id: string;
-  author_id: string;
+  user_id: string;
+  user?: User;
   content: string;
   internal: boolean;
+  attachments: Attachment[];
   created_at: string;
-  author?: User;
-  attachments?: Attachment[];
+  updated_at: string;
 }
 
 export interface TicketActivity {
   id: string;
   ticket_id: string;
   user_id: string;
-  action_type: string;
-  old_value?: string;
-  new_value?: string;
-  description?: string;
-  created_at: string;
   user?: User;
+  action: string;
+  details: Record<string, any>;
+  created_at: string;
 }
 
 export interface TicketRating {
@@ -68,31 +67,33 @@ export interface TicketRating {
 
 export interface Ticket {
   id: string;
-  user_id: string;
   subject: string;
   description: string;
   status: 'new' | 'open' | 'in_progress' | 'pending' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high' | 'critical';
-  category?: string;
-  due_date?: string;
-  assigned_agent_id?: string;
-  created_at: string;
-  updated_at: string;
+  user_id: string;
   user?: User;
+  assigned_agent_id?: string;
   assigned_agent?: User;
   tags: Tag[];
   comments: Comment[];
-  attachments: Attachment[];
   activities: TicketActivity[];
-  rating?: TicketRating | null;
+  attachments: Attachment[];
+  due_date?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TicketFilters {
+  search?: string;
   status?: string[];
   priority?: string[];
-  assigned_agent?: string[];
-  search?: string;
+  assigned_to?: string[];
   tags?: string[];
+  date_range?: {
+    start: string;
+    end: string;
+  };
 }
 
 export interface SavedReply {
@@ -100,7 +101,6 @@ export interface SavedReply {
   title: string;
   content: string;
   created_by: string;
-  is_public: boolean;
   created_at: string;
   updated_at: string;
 }

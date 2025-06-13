@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -21,13 +20,15 @@ import {
   FileText,
   Activity,
   Star,
-  Tag as TagIcon
+  Tag as TagIcon,
+  X
 } from 'lucide-react';
 import { Ticket, Comment, TicketActivity } from '@/types/ticketing';
 import { useComments } from '@/hooks/useComments';
 import { useTags } from '@/hooks/useTags';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { useRealtime } from '@/hooks/useRealtime';
 
 interface EnhancedTicketDetailViewProps {
   ticket: Ticket | null;
@@ -45,18 +46,31 @@ const EnhancedTicketDetailView: React.FC<EnhancedTicketDetailViewProps> = ({
   const { toast } = useToast();
   const { addComment, loading: commentLoading } = useComments();
   const { tags, createTag, addTagToTicket, removeTagFromTicket } = useTags();
+  const { subscribeToTicket } = useRealtime();
   
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [newNote, setNewNote] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
 
   useEffect(() => {
     if (ticket) {
       setEditingTicket({ ...ticket });
+      setComments(ticket.comments || []);
+      
+      // Subscribe to real-time updates for this ticket
+      const unsubscribe = subscribeToTicket(ticket.id, (updatedTicket) => {
+        setEditingTicket(updatedTicket);
+        setComments(updatedTicket.comments || []);
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }
-  }, [ticket]);
+  }, [ticket, subscribeToTicket]);
 
   if (!ticket || !editingTicket) return null;
 
@@ -113,11 +127,22 @@ const EnhancedTicketDetailView: React.FC<EnhancedTicketDetailViewProps> = ({
     if (!newMessage.trim()) return;
     
     try {
-      await addComment(ticket.id, newMessage, false, attachedFiles);
+      const comment = await addComment(ticket.id, newMessage, false, attachedFiles);
+      setComments(prev => [...prev, comment]);
       setNewMessage('');
       setAttachedFiles([]);
+      
+      toast({
+        title: "Message sent",
+        description: "Your message has been sent successfully.",
+      });
     } catch (error) {
       console.error('Failed to send message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -178,8 +203,8 @@ const EnhancedTicketDetailView: React.FC<EnhancedTicketDetailViewProps> = ({
           </SheetTitle>
         </SheetHeader>
 
-        <ScrollArea className="h-full mt-6">
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
             {/* Ticket Details */}
             <Card>
               <CardHeader>
@@ -265,106 +290,105 @@ const EnhancedTicketDetailView: React.FC<EnhancedTicketDetailViewProps> = ({
                   <TabsContent value="messages" className="space-y-4">
                     <ScrollArea className="h-96 w-full">
                       <div className="space-y-4">
-                        {ticket.comments?.filter(comment => !comment.internal).map((comment) => (
+                        {comments.filter(comment => !comment.internal).map((comment) => (
                           <div key={comment.id} className="flex space-x-3">
                             <Avatar className="w-8 h-8">
-                              <AvatarFallback>{comment.author?.name?.charAt(0)}</AvatarFallback>
+                              <AvatarFallback>
+                                {comment.is_admin ? 'A' : comment.user?.name?.charAt(0)}
+                              </AvatarFallback>
                             </Avatar>
                             <div className="flex-1">
                               <div className="bg-muted p-3 rounded-lg">
-                                <p className="text-sm">{comment.content}</p>
+                                <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
                                 {comment.attachments?.length > 0 && (
-                                  <div className="mt-2 space-y-1">
-                                    {comment.attachments.map((attachment, index) => (
-                                      <div key={index} className="flex items-center space-x-2 text-xs">
-                                        <Paperclip className="w-3 h-3" />
-                                        <span>{attachment.filename}</span>
+                                  <div className="mt-2 space-y-2">
+                                    {comment.attachments.map((attachment) => (
+                                      <div key={attachment.id} className="flex items-center space-x-2 text-sm">
+                                        <Paperclip className="h-4 w-4" />
+                                        <a 
+                                          href={attachment.url} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-primary hover:underline"
+                                        >
+                                          {attachment.name}
+                                        </a>
                                       </div>
                                     ))}
                                   </div>
                                 )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">
-                                {comment.author?.name} • {format(new Date(comment.created_at), 'MMM dd, yyyy HH:mm')}
+                                {comment.is_admin ? 'Admin' : comment.user?.name} • {format(new Date(comment.created_at), 'MMM dd, yyyy HH:mm')}
                               </p>
                             </div>
                           </div>
                         ))}
                       </div>
                     </ScrollArea>
-
-                    <Separator />
-
+                    
                     <div className="space-y-2">
-                      <Label htmlFor="newMessage">Reply to customer</Label>
                       <Textarea
-                        id="newMessage"
-                        placeholder="Type your response..."
+                        placeholder="Type your message..."
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        rows={3}
+                        className="min-h-[100px]"
                       />
-                      
-                      {attachedFiles.length > 0 && (
-                        <div className="space-y-1">
-                          {attachedFiles.map((file, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                              <span className="text-sm">{file.name}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="file"
+                            multiple
+                            onChange={handleFileAttachment}
+                            className="hidden"
+                            id="file-attachment"
+                          />
+                          <label htmlFor="file-attachment">
+                            <Button variant="outline" size="sm" type="button">
+                              <Paperclip className="h-4 w-4 mr-2" />
+                              Attach Files
+                            </Button>
+                          </label>
+                          {attachedFiles.length > 0 && (
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm text-muted-foreground">
+                                {attachedFiles.length} file(s) selected
+                              </span>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => removeAttachment(index)}
+                                onClick={() => setAttachedFiles([])}
                               >
-                                Remove
+                                <X className="h-4 w-4" />
                               </Button>
                             </div>
-                          ))}
+                          )}
                         </div>
-                      )}
-
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => document.getElementById('message-file-input')?.click()}
-                        >
-                          <Paperclip className="w-4 h-4 mr-2" />
-                          Attach
-                        </Button>
                         <Button 
-                          onClick={handleSendMessage} 
-                          disabled={commentLoading}
-                          className="flex-1"
+                          onClick={handleSendMessage}
+                          disabled={!newMessage.trim() || commentLoading}
                         >
-                          <Send className="w-4 h-4 mr-2" />
+                          <Send className="h-4 w-4 mr-2" />
                           Send Message
                         </Button>
                       </div>
-                      
-                      <input
-                        id="message-file-input"
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={handleFileAttachment}
-                      />
                     </div>
                   </TabsContent>
 
                   <TabsContent value="notes" className="space-y-4">
                     <ScrollArea className="h-96 w-full">
                       <div className="space-y-4">
-                        {ticket.comments?.filter(comment => comment.internal).map((comment) => (
+                        {comments.filter(comment => comment.internal).map((comment) => (
                           <div key={comment.id} className="flex space-x-3">
                             <Avatar className="w-8 h-8">
-                              <AvatarFallback>{comment.author?.name?.charAt(0)}</AvatarFallback>
+                              <AvatarFallback>{comment.user?.name?.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1">
                               <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
                                 <p className="text-sm">{comment.content}</p>
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">
-                                {comment.author?.name} • {format(new Date(comment.created_at), 'MMM dd, yyyy HH:mm')}
+                                {comment.user?.name} • {format(new Date(comment.created_at), 'MMM dd, yyyy HH:mm')}
                               </p>
                             </div>
                           </div>
@@ -463,7 +487,44 @@ const EnhancedTicketDetailView: React.FC<EnhancedTicketDetailViewProps> = ({
               </Button>
             </div>
           </div>
-        </ScrollArea>
+
+          {/* Tags Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <TagIcon className="w-5 h-5" />
+                <span>Tags</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {ticket.tags?.map((tag) => (
+                  <Badge 
+                    key={tag.id} 
+                    variant="secondary"
+                    style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                    className="cursor-pointer"
+                    onClick={() => removeTagFromTicket(ticket.id, tag.id)}
+                  >
+                    {tag.name} ×
+                  </Badge>
+                ))}
+              </div>
+              
+              <div className="flex space-x-2">
+                <Input
+                  placeholder="Create new tag..."
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                />
+                <Button onClick={handleCreateTag}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </SheetContent>
     </Sheet>
   );

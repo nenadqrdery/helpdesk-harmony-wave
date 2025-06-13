@@ -1,95 +1,120 @@
-
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Comment } from '@/types/ticketing';
-import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
+import { Comment, Attachment } from '@/types/ticketing';
 
 export const useComments = () => {
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
 
-  const addComment = async (ticketId: string, content: string, internal: boolean = false, attachments?: File[]) => {
+  const addComment = async (
+    ticketId: string,
+    content: string,
+    internal: boolean = false,
+    files: File[] = []
+  ) => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
 
-      const { data: comment, error } = await supabase
-        .from('comments')
-        .insert({
-          ticket_id: ticketId,
-          author_id: user.id,
-          content,
-          internal
-        })
-        .select()
-        .single();
+      // Upload attachments if any
+      const attachments: Attachment[] = [];
+      if (files.length > 0) {
+        for (const file of files) {
+          const filePath = `tickets/${ticketId}/attachments/${Date.now()}-${file.name}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('attachments')
+            .upload(filePath, file);
 
-      if (error) throw error;
+          if (uploadError) throw uploadError;
 
-      // Handle file uploads if any
-      if (attachments && attachments.length > 0) {
-        await uploadAttachments(attachments, ticketId, comment.id);
+          const { data: urlData } = supabase.storage
+            .from('attachments')
+            .getPublicUrl(filePath);
+
+          attachments.push({
+            id: uploadData.path,
+            name: file.name,
+            url: urlData.publicUrl,
+            size: file.size,
+            type: file.type,
+            created_at: new Date().toISOString(),
+          });
+        }
       }
 
-      toast({
-        title: "Success",
-        description: internal ? "Internal note added" : "Message sent"
-      });
+      // Create the comment
+      const { data: comment, error: commentError } = await supabase
+        .from('ticket_comments')
+        .insert({
+          ticket_id: ticketId,
+          content,
+          internal,
+          attachments,
+        })
+        .select(`
+          *,
+          user:users(*)
+        `)
+        .single();
+
+      if (commentError) throw commentError;
 
       return comment;
     } catch (err) {
-      console.error('Error adding comment:', err);
-      toast({
-        title: "Error",
-        description: "Failed to add comment",
-        variant: "destructive"
-      });
+      setError(err instanceof Error ? err.message : 'An error occurred');
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const uploadAttachments = async (files: File[], ticketId: string, commentId?: string) => {
+  const updateComment = async (commentId: string, updates: Partial<Comment>) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      setLoading(true);
 
-      const uploadPromises = files.map(async (file) => {
-        const fileName = `${user.id}/${Date.now()}-${file.name}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('attachments')
-          .upload(fileName, file);
+      const { data, error } = await supabase
+        .from('ticket_comments')
+        .update(updates)
+        .eq('id', commentId)
+        .select(`
+          *,
+          user:users(*)
+        `)
+        .single();
 
-        if (uploadError) throw uploadError;
+      if (error) throw error;
 
-        const { error: dbError } = await supabase
-          .from('attachments')
-          .insert({
-            ticket_id: ticketId,
-            comment_id: commentId,
-            filename: file.name,
-            file_path: uploadData.path,
-            file_size: file.size,
-            content_type: file.type,
-            uploaded_by: user.id
-          });
-
-        if (dbError) throw dbError;
-      });
-
-      await Promise.all(uploadPromises);
+      return data;
     } catch (err) {
-      console.error('Error uploading attachments:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
       throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    try {
+      setLoading(true);
+
+      const { error } = await supabase
+        .from('ticket_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
   return {
+    loading,
+    error,
     addComment,
-    uploadAttachments,
-    loading
+    updateComment,
+    deleteComment,
   };
 };
